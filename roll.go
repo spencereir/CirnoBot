@@ -39,6 +39,7 @@ func roll(words []string) string {
 	//General dice parameters
 	//Thresh may be interpreted based on the game specified
 	thresh := -1
+	err := error(nil)
 	quiet := false
 	opp := false
 	total2 := 0
@@ -61,16 +62,25 @@ func roll(words []string) string {
 		startind++
 	}
 	if strings.HasPrefix(words[startind], "thresh") {
-		thresh, _ = strconv.Atoi(words[startind][6:])
+		if len(words[startind]) <= 6 {
+			return "Thresh must have a parameter specified as the threshold, like thresh32 or thresh10."
+		}
+		thresh, err = strconv.Atoi(words[startind][6:])
+		if err != nil {
+			return "I excepted an integer after thresh, but instead got \"" + words[startind][6:] + "\"."
+		}
+
 		startind++
 	}
 	if words[startind] == "quiet" || words[startind] == "q" {
 		quiet = true
 		startind++
 	}
+	words[startind-1] = "+"
 	for i := startind - 1; i+1 < len(words); i += 2 {
 		if words[i] == "opp" || words[i] == "opponent" || words[i] == "opposed" {
 			opp = true
+			words[i] = "+"
 		}
 		place = 0
 		num = 0
@@ -79,6 +89,8 @@ func roll(words []string) string {
 		for j := 0; j < len(words[i+1]); j++ {
 			if words[i+1][j] == 'd' {
 				switched = true
+			} else if words[i+1][j] < '0' || words[i+1][j] > '9' {
+				return "I found an unexpected character; \"" + string(words[i+1][j]) + "\". The only dice format I can read is XdY where X and Y are integers"
 			} else if switched {
 				place = 10*place + int(words[i+1][j]-'0')
 			} else {
@@ -158,12 +170,14 @@ func roll(words []string) string {
 			} else {
 				total -= v
 			}
-		} else {
+		} else if words[i] == "+" {
 			if opp {
 				total2 += v
 			} else {
 				total += v
 			}
+		} else {
+			return "I wasn't sure how to interpret \"" + words[i] + "\". In the middle of rolls, I can only read plus and minus signs, as well as opposed checks (indicated by opp)."
 		}
 	}
 

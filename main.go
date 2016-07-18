@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"github.com/bwmarrin/discordgo"
+	"github.com/otium/ytdl"
 	"io/ioutil"
 	"math/rand"
 	"net/http"
@@ -14,15 +15,14 @@ import (
 )
 
 var (
-	markov *Chain = NewChain(2)
+	dg              *discordgo.Session
+	puush_logged_in bool
 
-	dg *discordgo.Session
-
+	markov   *Chain = NewChain(2)
 	tracks   []string
 	msgidlog map[string][]string = make(map[string][]string)
 	zawarudo map[string]bool     = make(map[string]bool)
 	msglog   map[string][]string = make(map[string][]string)
-	name     map[string][]string = make(map[string][]string)
 )
 
 func main() {
@@ -42,12 +42,16 @@ func main() {
 	}
 
 	fmt.Printf("Logging in to puush...\n")
-	puushLogin()
-	fmt.Printf("Logged in\n")
+	puush_logged_in = puushLogin()
+	if puush_logged_in {
+		fmt.Printf("Logged in\n")
+	} else {
+		fmt.Printf("Error logging in\n")
+	}
 
 	fmt.Printf("Building Markov chain...\n")
-	f, _ := os.Open("corpus.dat")
-	markov.Build(f)
+	//	f, _ := os.Open("corpus.dat")
+	//markov.Build(f)
 	fmt.Printf("Markov chain built\n")
 
 	dg.AddHandler(messageCreate)
@@ -56,11 +60,16 @@ func main() {
 
 	dg.UpdateStatus(0, "War of the Human Tanks")
 
+	ReadFromJSON()
 	fmt.Println("Bot ready")
 
 	var input string
 	fmt.Scanln(&input)
 	return
+}
+
+func ErrorMessage(location, context string, information []string) string {
+	return "Error with " + context + " in function " + location + ". Send this message to Spencer. Also give him this information: " + strings.Join(information, ";") + "."
 }
 
 func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
@@ -72,12 +81,14 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 	msgidlog[ch_id] = append(msgidlog[ch_id], m.Message.ID)
 	_, exists := name[guild.ID]
 	if !exists {
-		name[guild.ID] = []string{"@cirnobot", "cirno"}
+		AddNewServer(guild.ID)
+		fmt.Printf("Adding new server w/ name %v", guild.ID)
 	}
 	//no self replying
 	if author.Bot == true {
 		return
 	}
+
 	content := m.ContentWithMentionsReplaced()
 	cl := strings.ToLower(content)
 	words := strings.Fields(cl)
@@ -109,6 +120,8 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 	} else if cl == "!farage" {
 		s.ChannelMessageSend(ch_id, farage())
 		return
+	} else if cl == "!stop" || cl == "stop music" {
+		cancelRequest = true
 	} else if strings.Contains(cl, "buses") && strings.Contains(cl, "gensokyo") {
 		msg := "There are no buses in Gensokyo\n"
 		msg += "https://www.youtube.com/watch?v=5wFDWP5JwSM"
@@ -130,6 +143,23 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 		} else if strings.HasPrefix(cl[len(words[0]):], " add name") {
 			name[guild.ID] = append(name[guild.ID], words[3])
 			s.ChannelMessageSend(ch_id, "I will now respond to "+words[3])
+			servers.Servers[guild_to_ind[guild.ID]].Names = append(servers.Servers[guild_to_ind[guild.ID]].Names, words[3])
+			WriteToJSON()
+		} else if strings.HasPrefix(cl[len(words[0]):], " copy") {
+			paste[guild.ID][words[3]] = words[2]
+			servers.Servers[guild_to_ind[guild.ID]].Pastes = append(servers.Servers[guild_to_ind[guild.ID]].Pastes, makePaste(words[3], words[2]))
+			WriteToJSON()
+		} else if strings.HasPrefix(cl[len(words[0]):], " paste") {
+			if paste[guild.ID] == nil {
+				s.ChannelMessageSend(ch_id, "I couldn't find any pastes in this guild")
+			} else {
+				v, found := paste[guild.ID][words[2]]
+				if !found {
+					s.ChannelMessageSend(ch_id, "I couldn't find a paste with code "+words[2])
+				} else {
+					s.ChannelMessageSend(ch_id, v)
+				}
+			}
 		} else if strings.HasPrefix(cl[len(words[0]):], " reorder") {
 			s.ChannelMessageSend(ch_id, reorder(wordsCase))
 		} else if strings.HasPrefix(cl[len(words[0]):], " delete") {
@@ -194,6 +224,7 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 			msg := ""
 			for i := 2; i < len(words); i++ {
 				msg += words[i]
+				msg += " "
 			}
 			s.ChannelMessageSend(ch_id, msg)
 		} else if len(words) >= 4 && strings.HasPrefix(cl[len(words[0]):], " recommend anime") {
@@ -210,7 +241,17 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 				s.ChannelMessageSend(ch_id, stand(""))
 			}
 		} else if len(words) > 2 && strings.HasPrefix(cl[len(words[0]):], " puush") {
-			if len(words) < 4 {
+			if !puush_logged_in {
+				s.ChannelMessageSend(ch_id, "Apologies, but I'm currently having trouble connecting to Puush. Contact Spencer if this problem persists.\n")
+			} else if strings.Contains(wordsCase[2], "youtu.be") || strings.Contains(wordsCase[2], "youtube.") {
+				vid, _ := ytdl.GetVideoInfo(wordsCase[2])
+				a, _ := vid.GetDownloadURL(vid.Formats[0])
+				request := fmt.Sprintf("%v", a)
+				url := "http://tinyurl.com/api-create.php?url=" + request
+				res, _ := http.Get(url)
+				b, _ := ioutil.ReadAll(res.Body)
+				s.ChannelMessageSend(ch_id, string(b))
+			} else if len(words) < 4 {
 				s.ChannelMessageSend(ch_id, save(wordsCase[2]))
 			} else {
 				s.ChannelMessageSend(ch_id, saveAs(wordsCase[2], wordsCase[3]))
@@ -241,14 +282,14 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 			} else {
 				s.ChannelMessageSend(ch_id, brexitmeme(false, true))
 			}
-		} else {
-			for _, coll := range COLLECTIONS {
-				if scontains(cl, coll.Commands) {
-					var sound *Sound
-					fmt.Print("Enqueuing play")
-					go enqueuePlay(m.Author, guild, coll, sound)
-					return
-				}
+		}
+	} else {
+		for _, coll := range COLLECTIONS {
+			if scontains(cl, coll.Commands) {
+				var sound *Sound
+				fmt.Print("Enqueuing play")
+				go enqueuePlay(m.Author, guild, coll, sound)
+				return
 			}
 		}
 	}

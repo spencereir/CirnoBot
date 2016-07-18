@@ -14,6 +14,8 @@ var (
 	queues         map[string]chan *Play = make(map[string]chan *Play)
 	MAX_QUEUE_SIZE                       = 6
 	BITRATE                              = 128
+	cancelRequest                        = false
+	volume                               = 1.0
 )
 
 type Play struct {
@@ -75,6 +77,19 @@ var OHNO *SoundCollection = &SoundCollection{
 	},
 }
 
+var SONG *SoundCollection = &SoundCollection{
+	Prefix: "song",
+	Commands: []string{
+		"!music",
+	},
+	Sounds: []*Sound{
+		createSound("1", 1, 1000),
+		createSound("2", 1, 1000),
+		createSound("3", 1, 1000),
+		createSound("4", 1, 1000),
+	},
+}
+
 var ZAWARUDO *SoundCollection = &SoundCollection{
 	Prefix:   "zw",
 	Commands: []string{},
@@ -88,6 +103,7 @@ var COLLECTIONS []*SoundCollection = []*SoundCollection{
 	OHGOD,
 	OHNO,
 	ZAWARUDO,
+	SONG,
 }
 
 func createSound(Name string, Weight int, PartDelay int) *Sound {
@@ -170,6 +186,10 @@ func (s *Sound) Play(vc *discordgo.VoiceConnection) {
 
 	for _, buff := range s.buffer {
 		vc.OpusSend <- buff
+		if cancelRequest {
+			cancelRequest = false
+			break
+		}
 	}
 }
 

@@ -22,11 +22,25 @@ type TrackList struct {
 }
 
 func stand(genre string) string {
-	res, _ := http.Get("http://powerlisting.wikia.com/wiki/Special:Random")
+	information := []string{genre}
+	res, err := http.Get("http://powerlisting.wikia.com/wiki/Special:Random")
+	if err != nil {
+		return ErrorMessage("stand", "Superpower Wiki", information)
+	}
+
 	b, _ := ioutil.ReadAll(res.Body)
+	if err != nil {
+		return ErrorMessage("stand", "decoding response from Superpower Wiki", information)
+	}
+
 	html := string(b)
 	desc_regex := regexp.MustCompile("<meta name=\"description\" content=\".*\" />")
 	desc := desc_regex.FindString(html)
+
+	if len(desc) < 35 {
+		return ErrorMessage("stand", "parsing HTML: desc", information)
+	}
+
 	desc = desc[34:]
 	for i := 0; i < len(desc); i++ {
 		if desc[i] == '.' {
@@ -36,14 +50,27 @@ func stand(genre string) string {
 	}
 	name_regex := regexp.MustCompile("<title>.* - Superpower Wiki - Wikia</title>")
 	name := name_regex.FindString(html)
+
+	if len(desc) < 8 {
+		return ErrorMessage("stand", "parsing HTML: name", information)
+	}
+
 	name = name[7 : len(name)-34]
 
 	res = nil
 	track := ""
 	stand := ""
 	if genre != "" && genre != "all" {
-		res, _ = http.Get(fmt.Sprintf("http://ws.audioscrobbler.com/2.0/?method=tag.gettoptracks&tag=%v&api_key=%v", genre, LASTFM_API_KEY))
-		b, _ = ioutil.ReadAll(res.Body)
+		res, err = http.Get(fmt.Sprintf("http://ws.audioscrobbler.com/2.0/?method=tag.gettoptracks&tag=%v&api_key=%v", genre, LASTFM_API_KEY))
+		if err != nil {
+			return ErrorMessage("stand", "connecting to Last.FM", information)
+		}
+
+		b, err = ioutil.ReadAll(res.Body)
+		if err != nil {
+			return ErrorMessage("stand", "decoding response from Last.FM", information)
+		}
+
 		b = b[57 : len(b)-7] //Please don't ask
 		var tl TrackList
 		xml.Unmarshal(b, &tl)
@@ -56,11 +83,25 @@ func stand(genre string) string {
 	}
 	if genre == "" || genre == "all" {
 		res, _ = http.Get("http://ws.audioscrobbler.com/2.0/?method=chart.gettoptracks&api_key=" + LASTFM_API_KEY)
-		b, _ = ioutil.ReadAll(res.Body)
+		if err != nil {
+			return ErrorMessage("stand", "connecting to Last.FM", information)
+		}
+
+		b, err = ioutil.ReadAll(res.Body)
+		if err != nil {
+			return ErrorMessage("stand", "decoding response from Last.FM", information)
+		}
+
 		b = b[57 : len(b)-7]
 		var tl TrackList
 		xml.Unmarshal(b, &tl)
-		track = tl.Tracks[rand.Intn(len(tl.Tracks))].Name
+
+		if len(tl.Tracks) > 0 {
+			t := tl.Tracks[rand.Intn(len(tl.Tracks))]
+			track = t.Name
+		} else {
+			return ErrorMessage("stand", "finding track name", information)
+		}
 	}
 	stand += "Stand Name: 「" + track + "」\n\n"
 	stand += "Destructive Power: " + string(rune(rand.Intn(5)+'A')) + "\n"
