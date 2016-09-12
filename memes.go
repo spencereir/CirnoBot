@@ -1,7 +1,11 @@
 package main
 
 import (
+	"io/ioutil"
 	"math/rand"
+	"net/http"
+	"regexp"
+	"strings"
 )
 
 var (
@@ -49,6 +53,20 @@ var (
 
 func farage() string {
 	return farage_laughing[rand.Intn(len(farage_laughing))]
+}
+
+func xkcd(url string) string {
+	res, _ := http.Get(url)
+	b, _ := ioutil.ReadAll(res.Body)
+	html := string(b)
+	i_r := regexp.MustCompile("<img src=\"[\\.\\/\\w]+\"")
+	i := i_r.FindAllString(html, -1)[1]
+	i = i[10 : len(i)-1]
+	a_r := regexp.MustCompile("<img src=\".+\"\\stitle=\"[0-9a-zA-Z!@#:$%;\\.,^&*()\\s]+\"")
+	a := a_r.FindString(html)
+	a = a[19+len(i) : len(a)-1]
+	a = strings.Replace(a, "&#39;", "'", -1)
+	return "http:" + i + "\nAlt text: " + a
 }
 
 func brexitmeme(remain, leave bool) string {

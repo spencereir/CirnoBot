@@ -145,6 +145,17 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 			s.ChannelMessageSend(ch_id, "I will now respond to "+words[3])
 			servers.Servers[guild_to_ind[guild.ID]].Names = append(servers.Servers[guild_to_ind[guild.ID]].Names, words[3])
 			WriteToJSON()
+		} else if strings.HasPrefix(cl[len(words[0]):], " xkcd") {
+			if len(words) == 2 {
+				s.ChannelMessageSend(ch_id, xkcd("http://xkcd.com/"))
+			} else {
+				_, err := strconv.Atoi(words[2])
+				if err != nil {
+					s.ChannelMessageSend(ch_id, "http://imgs.xkcd.com/comics/"+strings.Join(words[2:], "_")+".png")
+				} else {
+					s.ChannelMessageSend(ch_id, xkcd("http://xkcd.com/"+words[2]+"/"))
+				}
+			}
 		} else if strings.HasPrefix(cl[len(words[0]):], " copy") {
 			paste[guild.ID][words[3]] = words[2]
 			servers.Servers[guild_to_ind[guild.ID]].Pastes = append(servers.Servers[guild_to_ind[guild.ID]].Pastes, makePaste(words[3], words[2]))
@@ -240,6 +251,9 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 			} else {
 				s.ChannelMessageSend(ch_id, stand(""))
 			}
+		} else if strings.HasPrefix(cl[len(words[0]):], " generate stanza") {
+			stanzas := []string{"Although its scent still lingers on \\ the form of a flower has scattered away", "For whom will the glory \\ of this world remain unchanged?", "Arriving today at the yonder side \\ of the deep mountains of evanescent existence", "We shall never allow ourselves to drift away \\ intoxicated, in the world of shallow dreams.", "Two roads diverged in a yellow wood, \\ And sorry I could not travel both \\ And be one traveler, long I stood \\ And looked down one as far as I could \\ To where it bent in the undergrowth;", "Then took the other, as just as fair, \\ And having perhaps the better claim, \\ Because it was grassy and wanted wear; \\ Though as for that the passing there \\ Had worn them really about the same,", "And both that morning equally lay \\ In leaves no step had trodden black. \\ Oh, I kept the first for another day! \\ Yet knowing how way leads on to way, \\ I doubted if I should ever come back.", "I shall be telling this with a sigh \\ Somewhere ages and ages hence: \\ Two roads diverged in a wood, and I— \\ I took the one less traveled by, \\ And that has made all the difference.", "The way a crow \\ Shook down on me \\ The dust of snow \\ From a hemlock tree", "Has given my heart \\ A change of mood \\ And saved some part \\ Of a day I had rued."}
+			s.ChannelMessageSend(ch_id, stanzas[rand.Intn(len(stanzas))])
 		} else if len(words) > 2 && strings.HasPrefix(cl[len(words[0]):], " puush") {
 			if !puush_logged_in {
 				s.ChannelMessageSend(ch_id, "Apologies, but I'm currently having trouble connecting to Puush. Contact Spencer if this problem persists.\n")
